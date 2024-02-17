@@ -12,6 +12,7 @@ class node:
     Class which describes a single node.
     """
     
+    #* >>> Constructor is called when node object is instantiated <<<
     def init(self, position: tuple[int]) -> None:
         """
         Inputs:
@@ -28,10 +29,11 @@ class node:
         self.f_value = None
         # Distance between this node and the end node
         self.h_value = None
-        # Distance between this node and the start node along generated path
+        # Distance between this node and the start node along path
         self.g_value = None
-        
-    def update_cost(self, parent: type[node], end_position: tuple[int]) -> None:
+    
+    #* >>> This function updates the cost of the node given its parent and the end position <<<
+    def calculate_cost(self, parent: type[node], end_position: tuple[int]) -> None:
         """
         Inputs:
             + parent       -> The parent node, ie. the one which searched this node.
