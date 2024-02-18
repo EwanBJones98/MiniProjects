@@ -6,19 +6,19 @@ This file contains the class definition for the grid. This defines the size of t
 the position of any obstructive terrain, and holds all nodes. Furthermore,
 the route-finding methods are defined on this grid.
 """
-from node import node
+from Node import Node
 
-class grid:
+class Grid:
     """
     Class which defines the grid on which the route is defined.
     """
     
     # Helper function to convert (x,y) map coordinate to 1D grid index
-    def index_from_coordinate(self, coordinate: tuple[int]) -> int:
+    def _index_from_coordinate(self, coordinate: tuple[int]) -> int:
         return  self.dimensions[0] * coordinate[1] + coordinate[0] % self.dimensions[0]
     
     # Helper function to convert 1D grid index to (x,y) map coordinate
-    def coordinate_from_index(self, index: int) -> tuple[int]:
+    def _coordinate_from_index(self, index: int) -> tuple[int]:
         return (index % self.dimensions[0], index // self.dimensions[0])
         
         
@@ -34,8 +34,10 @@ class grid:
         self.start_position = None
         self.end_position = None
         
-        self.open_list = [] # Nodes which are under consideration
-        self.closed_list = [] # Nodes which have already been considered
+        self.current_node = None
+        
+        self.open_list = set() # Grid indices of nodes which are under consideration
+        self.closed_list = set() # Grid indices of nodes which have already been considered
         
         #* >>> Initialise the grid as a list of None's <<<
         self.grid = []
@@ -44,7 +46,7 @@ class grid:
             self.grid.append(None)
             
     #* >>> Sets the start and end positions <<<
-    def set_start_end_positions(self, start_position: tuple[int], end_position: tuple[int]) -> None:
+    def _set_start_end_positions(self, start_position: tuple[int], end_position: tuple[int]) -> None:
         """
         Inputs:
             + start_position -> (x,y) grid coordinates of where to begin route
@@ -64,30 +66,25 @@ class grid:
         self.start_position = start_position
         self.end_position = end_position
         
-        # Create nodes in start and end positions
-        for position in [start_position, end_position]
-            index = self.index_from_coordinate(position)
-            self.grid[index] = node(position)
-            
-        # Add starting node's grid index to the open list
-        self.open_list.append(self.index_from_coordinate(self.start_position))
+        # Create node in start position and add to open list
+        start_index = self._index_from_coordinate(start_position)
+        self.grid[start_index] = Node(start_position)
+        self.grid[start_index].g_value = 0
+        self.grid[start_index].f_value = 0
+        self.grid[start_index].f_value = 0
+        self.open_list.add(start_index) 
         
-            
-    #* >>> Class which searches neighbours of target node and updates their costs <<<
-    def update_neighbours(self, target_node: type[node]) -> None:
-        
-        # Check that we have chosen start and end positions
-        if self.start_position is None or self.end_position is None:
-            print("Route finding started before start and end position defined. Exiting...")
-            exit(1)
-        
+    #* >>> Method which searches neighbours of the current node and updates their open/closed list status <<<
+    def _update_neighbours(self) -> None:
+    
         # Loop over neighbours
-        x_target, y_target = target_node.position
+        x_current, y_current = self.current_node.position
         for dx in [-1,0,1]:
             for dy in [-1,0,1]:
                 
-                x_neighbour = x_target + dx
-                y_neighbour = y_target + dy
+                x_neighbour = x_current + dx
+                y_neighbour = y_current + dy
+                index_neighbour = self._index_from_coordinate((x_neighbour, y_neighbour))
                 
                 # Check neighbour is within the bounds of the grid
                 if x_neighbour < 0 or y_neighbour < 0:
@@ -95,12 +92,82 @@ class grid:
                 if x_neighbour >= self.dimensions[0] or y_neighbour >= self.dimensions[1]:
                     continue
                 
-                # Add node to grid if it does not exist
-                grid_index = self.index_from_coordinate((x_neighbour, y_neighbour))
-                if self.grid[grid_index] is None:
-                    self.grid[grid_index] = node((x_neighbour, y_neighbour))
-                    self.grid[grid_index].calculate_cost(target_node, self.end_position)
+                # Add node object to grid if it does not yet exist. I only add nodes
+                #  as objects if they need checking to save memory on large grids
+                if self.grid[index_neighbour] is None:
+                    self.grid[index_neighbour] = Node((x_neighbour, y_neighbour))
+                
+                # Ignore non-traversable nodes
+                if not self.grid[index_neighbour].traversable:
+                    continue
+                # Ignore nodes on the closed list
+                if index_neighbour in self.closed_list:
+                    continue
+                
+                # Add node to open list if not already present
+                if index_neighbour not in self.open_list:
+                    self.open_list.add(index_neighbour)
+                    self.grid[index_neighbour].calculate_cost(self.current_node, self.end_position)
                 else:
-                    # Check that the neighbour is not the end node
-                    if 
-                    
+                    # Update neighbours values if path to it via current node is more optimal
+                    #  than via its current parent
+                    self.grid[index_neighbour].check_new_parent(self.current_node)    
+            
+    #* >>> Method which finds the shortest route between start and end positions <<<
+    def find_route(self, start_position: tuple[int], end_position: tuple[int],
+                   max_iter: int = 10000) -> list[tuple]:
+        """
+        Inputs:
+            + start_position -> The grid coordinate of the route's starting point
+            + end_position -> The grid coordinate of hte route's ending point
+            + max_iter -> The maximum number of iterations that the route finder will run for
+        Returns:
+            + Coordinates of nodes in the optimal route, ordered from start node to end node
+        """
+        
+        # <<< 1) Set the start and end positions of the route >>>
+        self._set_start_end_positions(start_position, end_position)
+        
+        
+        # <<< 2) Loop over cells to reach destination >>>
+        iter = 0
+        while iter < max_iter:
+        
+            # Set current node to lowest cost node in the open list
+            #! There is a faster way to do this, probably keeping a list sorted
+            #!  by f-value but this can be optimised later
+            iter_list = self.open_list.copy()
+            best_node = self.grid[iter_list.pop()]
+            if len(iter_list) != 0:
+                for node_index in iter_list:
+                    if self.grid[node_index].f_value < best_node.f_value:
+                        best_node = self.grid[node_index]
+            self.current_node = best_node
+            # Add current node to closed list
+            current_index = self._index_from_coordinate(self.current_node.position)
+            self.open_list.remove(current_index)
+            self.closed_list.add(current_index)
+            
+            # Check the neighbouring nodes and calculate their movement costs
+            self._update_neighbours()
+            
+            # If the current node is the end position then stop iterating
+            if self.grid[current_index].position == self.end_position:
+                break
+            # If the open list is empty there is no route to the destination
+            if len(self.open_list) == 0:
+                print("There exists no valid route to destination!")
+                break
+            
+            iter += 1
+            
+            
+        # <<< 3) Save the optimal route by tracing back through parent nodes >>>
+        end_index = self._index_from_coordinate(self.end_position)
+        current_node = self.grid[end_index]
+        route = []
+        while current_node.position != self.start_position:
+            route.insert(0, current_node.position)
+            current_node = current_node.parent
+        route.insert(0, self.start_position)
+        return route
