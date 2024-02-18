@@ -20,16 +20,27 @@ class Grid:
     # Helper function to convert 1D grid index to (x,y) map coordinate
     def _coordinate_from_index(self, index: int) -> tuple[int]:
         return (index % self.dimensions[0], index // self.dimensions[0])
-        
+    
+    # Helper function to check that a given coordinate is within the bounds of the grid
+    def _check_coordinate_in_bounds(self, coordinate: tuple[int]) -> bool:
+        in_bounds = True
+        if coordinate[0] < 0 or coordinate[0] >= self.dimensions[0]:
+            in_bounds = False
+        if coordinate[1] < 0 or coordinate[1] >= self.dimensions[1]:
+            in_bounds=False
+            
+        return in_bounds
         
     #* >>> Constructor is called when grid object is instantiated <<<
-    def __init__(self, dimensions: tuple[int]) -> None:
+    def __init__(self, dimensions: tuple[int], wall_positions: list[tuple[int]] = None) -> None:
         """
         Inputs:
             + dimensions -> The dimensions of the grid in number of nodes (x_dimension, y_dimension)
+            + wall_positions -> A list of (x,y) coordinates to place walls (impassable nodes)
         """
         
         self.dimensions = dimensions
+        self.grid = None
         
         self.start_position = None
         self.end_position = None
@@ -39,12 +50,31 @@ class Grid:
         self.open_list = set() # Grid indices of nodes which are under consideration
         self.closed_list = set() # Grid indices of nodes which have already been considered
         
-        #* >>> Initialise the grid as a list of None's <<<
+        # Create the grid
+        self.reset_grid(wall_positions)
+                
+    #* >>> Clears the grid and places walls in the specified locations <<<
+    def reset_grid(self, wall_positions: list[tuple[int]] = None):
+        """
+        Inputs:
+            + wall_positions -> A list of (x,y) coordinates to place walls (impassable nodes)
+        """
+        
+        # Initialise the grid as a list of None's
         self.grid = []
         # Collapsing the coordinates to one-dimensional index to avoid double loop
         for index in range(self.dimensions[0] * self.dimensions[1]):
             self.grid.append(None)
             
+        # Add walls to the grid in the specified locations
+        if wall_positions is not None:
+            for wall_coord in wall_positions:
+                if not self._check_coordinate_in_bounds(wall_coord):
+                    print(f"Wall coordinate {wall_coord} is out of bounds! Exiting...")
+                    exit(2)
+                wall_index = self._index_from_coordinate(wall_coord)
+                self.grid[wall_index] = Node(wall_coord, traversable=False)
+               
     #* >>> Sets the start and end positions <<<
     def _set_start_end_positions(self, start_position: tuple[int], end_position: tuple[int]) -> None:
         """
@@ -54,14 +84,12 @@ class Grid:
         """
         
         # Check the positions are within the bounds of the grid
-        for i in range(2):
-            if start_position[i] < 0 or start_position[i] >= self.dimensions[i]:
-                print("Start position placed out of bounds. Exiting...")
-                exit(2)
-            
-            if end_position[i] < 0 or end_position[i] >= self.dimensions[i]:
-                print("End position placed out of bounds. Exiting...")
-                exit(2)
+        if not self._check_coordinate_in_bounds(start_position):
+            print(f"Start position {start_position} placed out of bounds. Exiting...")
+            exit(2)
+        if not self._check_coordinate_in_bounds(end_position):
+            print(f"End position {end_position} placed out of bounds. Exiting...")
+            exit(2)
                 
         self.start_position = start_position
         self.end_position = end_position
@@ -87,9 +115,7 @@ class Grid:
                 index_neighbour = self._index_from_coordinate((x_neighbour, y_neighbour))
                 
                 # Check neighbour is within the bounds of the grid
-                if x_neighbour < 0 or y_neighbour < 0:
-                    continue
-                if x_neighbour >= self.dimensions[0] or y_neighbour >= self.dimensions[1]:
+                if not self._check_coordinate_in_bounds((x_neighbour, y_neighbour)):
                     continue
                 
                 # Add node object to grid if it does not yet exist. I only add nodes
